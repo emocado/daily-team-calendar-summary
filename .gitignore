@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Sensitive runtime configurations, credentials, tokens, logs, databases
+runtime/
+*.json
+!config/workflow.example.json
+!integrations/whatsapp-mcp/server.json
+!integrations/whatsapp-mcp/release-please-config.json
+*.db
+*.sqlite
+*.sqlite3
+*.token
+*credentials*.json
+*token*.json
+*.log
+
+# WhatsApp bridge stores and binaries
+integrations/whatsapp-mcp/whatsapp-bridge/store/
+integrations/whatsapp-mcp/bin/
+integrations/toolchains/
+
+# Environment variables
+.env
+*.env
+.env.*
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

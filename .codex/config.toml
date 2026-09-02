@@ -1,0 +1,23 @@
+[mcp_servers.google_calendar]
+url = "https://calendarmcp.googleapis.com/mcp/v1"
+auth = "oauth"
+enabled = true
+required = false
+enabled_tools = ["list_calendars", "list_events"]
+default_tools_approval_mode = "auto"
+startup_timeout_sec = 30
+tool_timeout_sec = 60
+
+[mcp_servers.safe_whatsapp]
+command = 'C:\Python313\python.exe'
+args = ['C:\Users\weikh\projects\daily-team-calendar-summary\src\safe_whatsapp_mcp.py', '--config', 'C:\Users\weikh\projects\daily-team-calendar-summary\runtime\workflow.json']
+enabled = true
+required = false
+enabled_tools = ["whatsapp_status", "send_daily_summary"]
+default_tools_approval_mode = "auto"
+startup_timeout_sec = 15
+tool_timeout_sec = 45
+
+[mcp_servers.safe_whatsapp.tools.send_daily_summary]
+approval_mode = "approve"
+
