@@ -9,6 +9,11 @@ import sys
 from typing import Any
 from zoneinfo import ZoneInfo
 
+# Ensure repository root is on sys.path for direct script invocations
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from src.calendar_service import GoogleCalendarService, CalendarServiceError
 from src.safe_whatsapp_mcp import SafeWhatsappService, WorkflowError
 from src.summary_formatter import format_calendar_summary
