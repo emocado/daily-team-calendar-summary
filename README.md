@@ -52,6 +52,28 @@ flowchart LR
 
 ---
 
+## How the Summary Engine Works
+
+The formatter ([`src/summary_formatter.py`](src/summary_formatter.py)) parses Google Calendar events, categorizes leaves versus meetings, and formats a 2-day daily digest for WhatsApp.
+
+```mermaid
+flowchart TD
+    A["Raw Calendar Events"] --> B["Filter 2-Day Window (Today & Tomorrow, SGT)"]
+    B --> C{"All-Day or Leave Regex?<br/><i>(al, mc, ooo, wfh, off, etc.)</i>"}
+    C -- Yes --> D["🏖️ Leave / All-Day<br/>• Title"]
+    C -- No --> E["⏰ Schedule / Meetings<br/>• *hh:mm AM/PM*: Title"]
+    D & E --> F["Assemble WhatsApp Message<br/>Sorted & Grouped by Day"]
+```
+
+### Core Logic
+1. **2-Day Horizon (SGT):** Normalizes timestamps to `Asia/Singapore`. Evaluates overlap with Today and Tomorrow, properly handling Google Calendar's exclusive end dates for multi-day events.
+2. **Smart Categorization:**
+   - 🏖️ **Leave / All-Day:** Includes all-day entries and any event whose title matches common leave/OOO patterns (`leave`, `al`, `mc`, `ooo`, `wfh`, `off`, `half day`, etc.).
+   - ⏰ **Schedule / Meetings:** All remaining timed events, sorted chronologically by start time.
+3. **WhatsApp Formatting:** Groups entries under `📌 *Today*` and `📌 *Tomorrow*` sections with start-to-end time badges, empty-day fallbacks (`• _No events scheduled_`), and a timestamp footer.
+
+---
+
 ## Repository Structure
 
 ```text
