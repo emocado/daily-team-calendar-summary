@@ -75,6 +75,44 @@ class SafeWhatsappMcpTests(unittest.TestCase):
         send_tool = next(t for t in response["result"]["tools"] if t["name"] == "send_daily_summary")
         self.assertNotIn("recipient", send_tool["inputSchema"]["properties"])
 
+    def test_green_api_status_and_send(self):
+        green_config = {
+            "timezone": "Asia/Singapore",
+            "whatsapp": {
+                "provider": "green_api",
+                "green_api": {
+                    "id_instance": "12345",
+                    "api_token_instance": "tokenabc",
+                },
+                "group_name": "Me, Myself and I",
+                "group_jid": "12345@g.us",
+            },
+        }
+        green_config_path = self.root / "config" / "green_workflow.json"
+        green_config_path.write_text(json.dumps(green_config), encoding="utf-8")
+        green_service = SafeWhatsappService(green_config_path, self.root / "runtime" / "green_state.db")
+
+        with mock.patch.object(green_service, "_green_api_request", return_value={"stateInstance": "authorized"}):
+            status = green_service.status()
+            self.assertTrue(status["authorized"])
+            self.assertTrue(status["group_verified"])
+            self.assertEqual("green_api", status["provider"])
+
+        today = dt.datetime.now(ZoneInfo("Asia/Singapore")).date().isoformat()
+        with mock.patch.object(green_service, "_green_api_request") as mock_req:
+            mock_req.side_effect = [
+                {"stateInstance": "authorized"},  # _ensure_bridge
+                {"idMessage": "MSG123"},          # sendMessage
+            ]
+            first = green_service.send_daily_summary(today, "hello from green api")
+            self.assertEqual("sent", first["status"])
+            self.assertEqual("MSG123", first["result"]["idMessage"])
+
+            # Idempotency check
+            second = green_service.send_daily_summary(today, "hello from green api")
+            self.assertEqual("already_sent", second["status"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
