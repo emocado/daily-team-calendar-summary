@@ -5,8 +5,14 @@
     "calendar_id": "PIN_AFTER_GOOGLE_OAUTH"
   },
   "whatsapp": {
-    "group_name": "",
-    "group_jid": "PIN_AFTER_QR_PAIRING",
+    "provider": "green_api",
+    "green_api": {
+      "id_instance": "YOUR_GREEN_API_ID_INSTANCE",
+      "api_token_instance": "YOUR_GREEN_API_TOKEN_INSTANCE",
+      "api_url": "https://api.green-api.com"
+    },
+    "group_name": "Team WhatsApp Group",
+    "group_jid": "120363000000000000@g.us",
     "bridge_url": "http://127.0.0.1:8080/api",
     "database_path": "integrations/whatsapp-mcp/whatsapp-bridge/store/messages.db",
     "bridge_token_path": "integrations/whatsapp-mcp/whatsapp-bridge/store/.bridge-token",

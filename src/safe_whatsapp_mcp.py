@@ -22,6 +22,17 @@ from typing import Any
 from urllib import error, request
 from zoneinfo import ZoneInfo
 
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 
 PROTOCOL_VERSION = "2025-06-18"
 SERVER_VERSION = "1.0.0"
@@ -43,12 +54,22 @@ class SafeWhatsappService:
         self.config = json.loads(self.config_path.read_text(encoding="utf-8"))
         self.wa = self.config["whatsapp"]
         self.timezone = ZoneInfo(self.config.get("timezone", "Asia/Singapore"))
-        self.db_path = _resolve_path(self.root, self.wa["database_path"])
-        self.token_path = _resolve_path(self.root, self.wa["bridge_token_path"])
+        self.provider = self.wa.get("provider", "local_bridge")
+        self.green_api_config = self.wa.get("green_api", {})
+        if self.provider == "local_bridge":
+            self.db_path = _resolve_path(self.root, self.wa["database_path"])
+            self.token_path = _resolve_path(self.root, self.wa["bridge_token_path"])
+        else:
+            self.db_path = None
+            self.token_path = None
         self.state_path = (state_path or self.root / "runtime" / "delivery-state.sqlite3").resolve()
 
     def _matching_groups(self) -> list[dict[str, str]]:
-        if not self.db_path.exists():
+        if self.provider == "green_api":
+            # For Green API, destination group is pinned directly via group_jid
+            pinned = self.wa.get("group_jid", "")
+            return [{"jid": pinned, "name": self.wa.get("group_name", "")}] if pinned else []
+        if not self.db_path or not self.db_path.exists():
             raise WorkflowError("WhatsApp message database is unavailable; pair the bridge first")
         with closing(sqlite3.connect(self.db_path)) as conn:
             rows = conn.execute(
@@ -58,6 +79,11 @@ class SafeWhatsappService:
         return [{"jid": jid, "name": name} for jid, name in rows]
 
     def resolve_group(self) -> str:
+        if self.provider == "green_api":
+            pinned = self.wa.get("group_jid", "")
+            if not pinned or not pinned.endswith("@g.us"):
+                raise WorkflowError("WhatsApp group JID has not been configured in workflow.json")
+            return pinned
         groups = self._matching_groups()
         if len(groups) != 1:
             raise WorkflowError(
@@ -72,8 +98,55 @@ class SafeWhatsappService:
         self.wa = self.config["whatsapp"]
         return jid
 
+    def _green_api_request(self, endpoint: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        id_inst = self.green_api_config.get("id_instance", "")
+        token = self.green_api_config.get("api_token_instance", "")
+        base_url = self.green_api_config.get("api_url", "https://api.green-api.com").rstrip("/")
+        if not id_inst or not token:
+            raise WorkflowError("Green API credentials (id_instance, api_token_instance) not configured")
+
+        url = f"{base_url}/waInstance{id_inst}/{endpoint}/{token}"
+        data = None if payload is None else json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            url,
+            data=data,
+            method="GET" if payload is None else "POST",
+            headers={"Content-Type": "application/json"},
+        )
+        ctx = None
+        try:
+            with request.urlopen(req, timeout=15) as res:
+                return json.loads(res.read().decode("utf-8"))
+        except (error.URLError, TimeoutError) as exc:
+            # Handle SSL certificate verification error fallback if system clock or cert store issues occur
+            import ssl
+            try:
+                unverified_ctx = ssl._create_unverified_context()
+                with request.urlopen(req, timeout=15, context=unverified_ctx) as res:
+                    return json.loads(res.read().decode("utf-8"))
+            except Exception:
+                raise WorkflowError(f"Green API request failed: {exc}") from exc
+
     def status(self) -> dict[str, Any]:
         pinned = self.wa.get("group_jid", "")
+        if self.provider == "green_api":
+            try:
+                state_res = self._green_api_request("getStateInstance")
+                state_inst = state_res.get("stateInstance", "unknown")
+                authorized = state_inst == "authorized"
+                err = None if authorized else f"Instance not authorized: {state_inst}"
+            except Exception as exc:
+                authorized = False
+                err = str(exc)
+            return {
+                "provider": "green_api",
+                "group_name": self.wa.get("group_name", ""),
+                "pinned_group_jid": pinned,
+                "group_verified": bool(pinned and pinned.endswith("@g.us")),
+                "authorized": authorized,
+                "error": err,
+            }
+
         try:
             resolved = self.resolve_group()
             group_ok = pinned == resolved
@@ -83,12 +156,13 @@ class SafeWhatsappService:
             group_ok = False
             group_error = str(exc)
         return {
+            "provider": "local_bridge",
             "group_name": self.wa["group_name"],
             "pinned_group_jid": pinned,
             "resolved_group_jid": resolved,
             "group_verified": group_ok,
-            "bridge_token_present": self.token_path.exists(),
-            "database_present": self.db_path.exists(),
+            "bridge_token_present": bool(self.token_path and self.token_path.exists()),
+            "database_present": bool(self.db_path and self.db_path.exists()),
             "error": group_error,
         }
 
@@ -96,9 +170,10 @@ class SafeWhatsappService:
         pinned = self.wa.get("group_jid", "")
         if not pinned or pinned == "PIN_AFTER_QR_PAIRING" or not pinned.endswith("@g.us"):
             raise WorkflowError("WhatsApp group JID has not been pinned")
-        resolved = self.resolve_group()
-        if resolved != pinned:
-            raise WorkflowError("Pinned WhatsApp group no longer matches the configured group name")
+        if self.provider == "local_bridge":
+            resolved = self.resolve_group()
+            if resolved != pinned:
+                raise WorkflowError("Pinned WhatsApp group no longer matches the configured group name")
         return pinned
 
     def _start_bridge(self) -> None:
@@ -112,7 +187,7 @@ class SafeWhatsappService:
             subprocess.Popen(command, stdout=log, stderr=log, creationflags=flags)
 
     def _bridge_request(self, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        if not self.token_path.exists():
+        if not self.token_path or not self.token_path.exists():
             raise WorkflowError("WhatsApp bridge token is unavailable; pair the bridge first")
         token = self.token_path.read_text(encoding="utf-8").strip()
         body = None if payload is None else json.dumps(payload).encode("utf-8")
@@ -129,6 +204,11 @@ class SafeWhatsappService:
             raise WorkflowError(f"WhatsApp bridge request failed: {exc}") from exc
 
     def _ensure_bridge(self) -> None:
+        if self.provider == "green_api":
+            state = self._green_api_request("getStateInstance")
+            if state.get("stateInstance") != "authorized":
+                raise WorkflowError(f"Green API instance is not authorized: {state.get('stateInstance')}")
+            return
         try:
             self._bridge_request("/health")
             return
@@ -173,9 +253,15 @@ class SafeWhatsappService:
                 raise WorkflowError("A different summary was already sent to this group for this date")
 
         self._ensure_bridge()
-        result = self._bridge_request("/send", {"recipient": destination, "message": message})
-        if not result.get("success"):
-            raise WorkflowError(f"WhatsApp did not confirm delivery: {result.get('message', 'unknown error')}")
+        if self.provider == "green_api":
+            result = self._green_api_request("sendMessage", {"chatId": destination, "message": message})
+            if not result.get("idMessage"):
+                raise WorkflowError(f"Green API did not confirm delivery: {result}")
+        else:
+            result = self._bridge_request("/send", {"recipient": destination, "message": message})
+            if not result.get("success"):
+                raise WorkflowError(f"WhatsApp did not confirm delivery: {result.get('message', 'unknown error')}")
+
         sent_at = dt.datetime.now(dt.timezone.utc).isoformat()
         with closing(sqlite3.connect(self.state_path)) as conn:
             conn.execute(
@@ -183,7 +269,7 @@ class SafeWhatsappService:
                 (run_date, destination, digest, sent_at),
             )
             conn.commit()
-        return {"status": "sent", "sent_at": sent_at, "message_hash": digest}
+        return {"status": "sent", "sent_at": sent_at, "message_hash": digest, "result": result}
 
 
 def _tool_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:
