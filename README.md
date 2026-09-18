@@ -45,7 +45,7 @@ flowchart LR
    - Supports up to 3 active chats (1 group easily satisfies requirements).
    - Acts as a cloud-hosted WhatsApp Web linked device, maintaining the connection 24/7.
 3. **Idempotency & Destination Locking:**
-   - Messages are destination-locked to the exact pinned group JID (`120363000000000000@g.us`).
+   - Messages are destination-locked to the exact pinned group JID (e.g. configured in workflow settings).
    - Runs record state keyed by `(run_date, destination_jid)` to prevent duplicate sends on retries.
 4. **Dual-Provider Core Codebase:**
    - `src/safe_whatsapp_mcp.py` supports both `provider: "green_api"` and `provider: "local_bridge"`, allowing seamless testing and local CLI verification alongside the cloud workflow.

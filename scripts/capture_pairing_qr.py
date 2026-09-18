@@ -21,6 +21,13 @@ QR_PATH = ROOT / "runtime" / "whatsapp-pairing.png"
 PAYLOAD_PATH = ROOT / "runtime" / "whatsapp-qr-payload.txt"
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
+def _get_wsl_bridge_dir() -> str:
+    # Convert ROOT to WSL mount path
+    drive = ROOT.drive.rstrip(":").lower()
+    path_without_drive = ROOT.as_posix().split(":", 1)[-1]
+    return f"/mnt/{drive}{path_without_drive}/integrations/whatsapp-mcp/whatsapp-bridge"
+
+
 COMMAND = [
     "wsl.exe",
     "-d",
@@ -28,7 +35,7 @@ COMMAND = [
     "--",
     "bash",
     "-lc",
-    "cd /path/to/daily-team-calendar-summary/integrations/whatsapp-mcp/whatsapp-bridge "
+    f"cd '{_get_wsl_bridge_dir()}' "
     "&& exec env WEBHOOK_ENABLED=false FORWARD_SELF=false WHATSAPP_DEVICE_NAME=Team-Calendar-Summary "
     "../bin/whatsapp-bridge-ubuntu",
 ]

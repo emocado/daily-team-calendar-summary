@@ -8,7 +8,7 @@ Use Google's hosted Calendar MCP for the calendar side, subject to a one-time co
 
 Keep the existing scheduler as the orchestrator. MCP supplies tools; it does not schedule jobs. The daily run should:
 
-1. Resolve and pin the exact ID of **Team Leave & Events** (the visible calendar name; confirm whether this is the calendar the user called **Team Leave & Events**).
+1. Resolve and pin the exact ID of **Team Leave & Events** (the visible calendar name).
 2. Read events from today 00:00 through the day after tomorrow 00:00 in `Asia/Singapore`, yielding today and tomorrow.
 3. Format a short deterministic summary.
 4. Resolve **Me, Myself and I** to its WhatsApp group JID and send once, with an idempotency record keyed by run date, destination JID, and message hash.

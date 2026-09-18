@@ -12,7 +12,7 @@
       "api_url": "https://api.green-api.com"
     },
     "group_name": "Team WhatsApp Group",
-    "group_jid": "120363000000000000@g.us",
+    "group_jid": "YOUR_TARGET_GROUP_JID@g.us",
     "bridge_url": "http://127.0.0.1:8080/api",
     "database_path": "integrations/whatsapp-mcp/whatsapp-bridge/store/messages.db",
     "bridge_token_path": "integrations/whatsapp-mcp/whatsapp-bridge/store/.bridge-token",

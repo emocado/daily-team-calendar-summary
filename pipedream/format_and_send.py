@@ -10,22 +10,23 @@
 import datetime as dt
 import hashlib
 import json
+import os
+import random
 import re
+import time
 from typing import Any
 from urllib import request, error
 from zoneinfo import ZoneInfo
 
-# Green API configuration
-GREEN_API_ID_INSTANCE = "YOUR_GREEN_API_ID_INSTANCE"
-GREEN_API_TOKEN_INSTANCE = "YOUR_GREEN_API_TOKEN_INSTANCE"
-GREEN_API_BASE_URL = "https://api.green-api.com"
+# Green API configuration (configurable via environment variables)
+GREEN_API_ID_INSTANCE = os.environ.get("GREEN_API_ID_INSTANCE", "YOUR_GREEN_API_ID_INSTANCE")
+GREEN_API_TOKEN_INSTANCE = os.environ.get("GREEN_API_TOKEN_INSTANCE", "YOUR_GREEN_API_TOKEN_INSTANCE")
+GREEN_API_BASE_URL = os.environ.get("GREEN_API_BASE_URL", "https://api.green-api.com")
 
 # Target WhatsApp Group JID
-# Test Group ("Me, Myself and I"): 120363000000000001@g.us
-# Production Group ("Team WhatsApp Group"): 120363000000000000@g.us
-TARGET_GROUP_JID = "120363000000000000@g.us"
-CALENDAR_DISPLAY_NAME = "Team Leave & Events"
-TIMEZONE_NAME = "Asia/Singapore"
+TARGET_GROUP_JID = os.environ.get("TARGET_GROUP_JID", "120363000000000000@g.us")
+CALENDAR_DISPLAY_NAME = os.environ.get("CALENDAR_DISPLAY_NAME", "Team Leave & Events")
+TIMEZONE_NAME = os.environ.get("TIMEZONE_NAME", "Asia/Singapore")
 
 LEAVE_PATTERN = re.compile(
     r"\b(leave|annual\s+leave|al|mc|off|ooo|out\s+of\s+office|vacation|holiday|wfh|wfo|half\s+day|absent|unwell|medical|childcare|hospital)\b",
@@ -147,18 +148,38 @@ def format_calendar_summary(
     return "\n".join(header + today_lines + [""] + tomorrow_lines + footer)
 
 
-def send_to_green_api(chat_id: str, message: str) -> dict[str, Any]:
+def send_to_green_api(chat_id: str, message: str, max_retries: int = 4, initial_delay: float = 2.0) -> dict[str, Any]:
     url = f"{GREEN_API_BASE_URL.rstrip('/')}/waInstance{GREEN_API_ID_INSTANCE}/sendMessage/{GREEN_API_TOKEN_INSTANCE}"
     payload = json.dumps({"chatId": chat_id, "message": message}).encode("utf-8")
     req = request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
-    try:
-        with request.urlopen(req, timeout=20) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Green API request failed with status {exc.code}: {body}") from exc
-    except Exception as exc:
-        raise RuntimeError(f"Green API request error: {exc}") from exc
+
+    delay = initial_delay
+    for attempt in range(1, max_retries + 1):
+        try:
+            with request.urlopen(req, timeout=20) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            # Retry only on server errors (5xx) or rate limits (429)
+            if attempt < max_retries and (exc.code >= 500 or exc.code == 429):
+                wait_time = delay + random.uniform(0.1, 0.5)
+                print(f"[Attempt {attempt}/{max_retries}] Green API HTTP {exc.code}: {body}. Retrying in {wait_time:.2f}s...")
+                time.sleep(wait_time)
+                delay *= 2
+                continue
+            raise RuntimeError(f"Green API request failed with status {exc.code}: {body}") from exc
+        except (error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+            # Network timeouts or connection issues (such as Errno 110 Connection timed out)
+            if attempt < max_retries:
+                wait_time = delay + random.uniform(0.1, 0.5)
+                print(f"[Attempt {attempt}/{max_retries}] Green API network error: {exc}. Retrying in {wait_time:.2f}s...")
+                time.sleep(wait_time)
+                delay *= 2
+                continue
+            raise RuntimeError(f"Green API request error after {max_retries} attempts: {exc}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Green API request error: {exc}") from exc
+    raise RuntimeError(f"Green API request failed after {max_retries} attempts")
 
 
 def handler(pd: "pipedream") -> dict[str, Any]:

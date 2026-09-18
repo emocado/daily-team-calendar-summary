@@ -112,6 +112,40 @@ class SafeWhatsappMcpTests(unittest.TestCase):
             second = green_service.send_daily_summary(today, "hello from green api")
             self.assertEqual("already_sent", second["status"])
 
+    def test_green_api_retry_on_timeout(self):
+        green_config = {
+            "timezone": "Asia/Singapore",
+            "whatsapp": {
+                "provider": "green_api",
+                "green_api": {
+                    "id_instance": "test_id",
+                    "api_token_instance": "test_token",
+                    "api_url": "https://api.green-api.com",
+                },
+                "group_name": "Team Group",
+                "group_jid": "120363000000000000@g.us",
+            },
+        }
+        green_config_path = self.root / "config" / "green_retry_workflow.json"
+        green_config_path.write_text(json.dumps(green_config), encoding="utf-8")
+        green_service = SafeWhatsappService(green_config_path, self.root / "runtime" / "green_retry_state.db")
+
+        # Simulate timeout on first call, success on second call
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = json.dumps({"stateInstance": "authorized"}).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch("urllib.request.urlopen") as mock_urlopen, mock.patch("time.sleep") as mock_sleep:
+            import urllib.error
+            mock_urlopen.side_effect = [
+                urllib.error.URLError("Connection timed out"),
+                mock_response,
+            ]
+            res = green_service._green_api_request("getStateInstance", max_retries=2, initial_delay=0.01)
+            self.assertEqual("authorized", res["stateInstance"])
+            self.assertEqual(2, mock_urlopen.call_count)
+            mock_sleep.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

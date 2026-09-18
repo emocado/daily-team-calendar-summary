@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import random
 import sqlite3
 import subprocess
 import sys
@@ -98,7 +99,9 @@ class SafeWhatsappService:
         self.wa = self.config["whatsapp"]
         return jid
 
-    def _green_api_request(self, endpoint: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _green_api_request(
+        self, endpoint: str, payload: dict[str, Any] | None = None, max_retries: int = 4, initial_delay: float = 2.0
+    ) -> dict[str, Any]:
         id_inst = self.green_api_config.get("id_instance", "")
         token = self.green_api_config.get("api_token_instance", "")
         base_url = self.green_api_config.get("api_url", "https://api.green-api.com").rstrip("/")
@@ -113,19 +116,30 @@ class SafeWhatsappService:
             method="GET" if payload is None else "POST",
             headers={"Content-Type": "application/json"},
         )
-        ctx = None
-        try:
-            with request.urlopen(req, timeout=15) as res:
-                return json.loads(res.read().decode("utf-8"))
-        except (error.URLError, TimeoutError) as exc:
-            # Handle SSL certificate verification error fallback if system clock or cert store issues occur
-            import ssl
+
+        delay = initial_delay
+        for attempt in range(1, max_retries + 1):
             try:
-                unverified_ctx = ssl._create_unverified_context()
-                with request.urlopen(req, timeout=15, context=unverified_ctx) as res:
+                with request.urlopen(req, timeout=15) as res:
                     return json.loads(res.read().decode("utf-8"))
-            except Exception:
-                raise WorkflowError(f"Green API request failed: {exc}") from exc
+            except (error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+                # Handle SSL certificate verification error fallback if system clock or cert store issues occur
+                import ssl
+                if isinstance(exc, error.URLError) and "CERTIFICATE" in str(exc).upper():
+                    try:
+                        unverified_ctx = ssl._create_unverified_context()
+                        with request.urlopen(req, timeout=15, context=unverified_ctx) as res:
+                            return json.loads(res.read().decode("utf-8"))
+                    except Exception:
+                        pass
+
+                if attempt < max_retries:
+                    wait_time = delay + random.uniform(0.1, 0.5)
+                    time.sleep(wait_time)
+                    delay *= 2
+                    continue
+                raise WorkflowError(f"Green API request failed after {max_retries} attempts: {exc}") from exc
+        raise WorkflowError(f"Green API request failed after {max_retries} attempts")
 
     def status(self) -> dict[str, Any]:
         pinned = self.wa.get("group_jid", "")

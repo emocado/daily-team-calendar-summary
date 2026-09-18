@@ -6,9 +6,9 @@ This guide walks you through creating your automated, zero-cost, 100% cloud-host
 
 ## Prerequisites
 - [Pipedream](https://pipedream.com/) account (Free plan).
-- Green API credentials (already configured in the script):
-  - `idInstance`: `YOUR_GREEN_API_ID_INSTANCE`
-  - `apiTokenInstance`: `YOUR_GREEN_API_TOKEN_INSTANCE`
+- Green API credentials:
+  - `idInstance`: Your Green API instance ID
+  - `apiTokenInstance`: Your Green API token
 - Google Account with access to the **Team Leave & Events** Google Calendar:
   - Calendar ID: `your_calendar_id@group.calendar.google.com`
 
@@ -40,7 +40,7 @@ This guide walks you through creating your automated, zero-cost, 100% cloud-host
 3. Choose the action: **Find Events** (or **List Events**).
 4. Connect your Google Account via the 1-click Google OAuth button.
 5. In the configuration:
-   - **Calendar:** Select `Team Leave & Events` (or choose "Enter a custom value" and paste: `your_calendar_id@group.calendar.google.com`).
+   - **Calendar:** Select your team calendar (e.g. `Team Leave & Events` or enter your calendar ID `your_calendar_id@group.calendar.google.com`).
    - **Time Min:** `{{ steps.trigger.context.ts }}` (or leave blank to search from current time).
    - **Single Events:** `true` (expands recurring events).
    - **Order By:** `startTime`.
@@ -54,15 +54,11 @@ This guide walks you through creating your automated, zero-cost, 100% cloud-host
 1. Click the **+** button to add another step.
 2. Select **Python** > **Run Python code**.
 3. Replace all default code in the editor with the complete contents of [`pipedream/format_and_send.py`](format_and_send.py).
-4. Review the target group at the top of the script:
-   - To send to the **Team Group ("Team WhatsApp Group")**:
-     ```python
-     TARGET_GROUP_JID = "120363000000000000@g.us"
-     ```
-   - To test with the **Personal Test Group ("Me, Myself and I")**:
-     ```python
-     TARGET_GROUP_JID = "120363000000000001@g.us"
-     ```
+4. Configure your environment variables or adjust the configuration at the top of the script:
+   - `GREEN_API_ID_INSTANCE`: Your Green API instance ID
+   - `GREEN_API_TOKEN_INSTANCE`: Your Green API token
+   - `TARGET_GROUP_JID`: Target WhatsApp group JID (e.g. `120363000000000000@g.us`)
+   - `CALENDAR_DISPLAY_NAME`: Display name for the summary header
 5. Click **Test** to execute a test run.
    - You should see the formatted summary in the test logs and immediately receive the summary message in your WhatsApp group!
 
