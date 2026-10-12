@@ -104,7 +104,7 @@ class SafeWhatsappService:
     ) -> dict[str, Any]:
         id_inst = self.green_api_config.get("id_instance", "")
         token = self.green_api_config.get("api_token_instance", "")
-        base_url = self.green_api_config.get("api_url", "https://api.green-api.com").rstrip("/")
+        base_url = self.green_api_config.get("api_url", "https://api.greenapi.com").rstrip("/")
         if not id_inst or not token:
             raise WorkflowError("Green API credentials (id_instance, api_token_instance) not configured")
 

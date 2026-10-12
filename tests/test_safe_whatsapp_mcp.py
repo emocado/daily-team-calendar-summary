@@ -120,7 +120,7 @@ class SafeWhatsappMcpTests(unittest.TestCase):
                 "green_api": {
                     "id_instance": "test_id",
                     "api_token_instance": "test_token",
-                    "api_url": "https://api.green-api.com",
+                    "api_url": "https://api.greenapi.com",
                 },
                 "group_name": "Team Group",
                 "group_jid": "120363000000000000@g.us",

@@ -57,6 +57,7 @@ This guide walks you through creating your automated, zero-cost, 100% cloud-host
 4. Configure your environment variables or adjust the configuration at the top of the script:
    - `GREEN_API_ID_INSTANCE`: Your Green API instance ID
    - `GREEN_API_TOKEN_INSTANCE`: Your Green API token
+   - `GREEN_API_BASE_URL` (optional): Defaults to `https://api.greenapi.com`. You can also use the instance-specific `apiUrl` shown in your Green API console (e.g. `https://7103.api.greenapi.com`). Do **not** use the legacy `api.green-api.com` host; it is unreachable and fails with `[Errno 110] Connection timed out`.
    - `TARGET_GROUP_JID`: Target WhatsApp group JID (e.g. `120363000000000000@g.us`)
    - `CALENDAR_DISPLAY_NAME`: Display name for the summary header
 5. Click **Test** to execute a test run.
